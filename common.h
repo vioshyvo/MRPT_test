@@ -7,10 +7,53 @@
 #include <iomanip>
 #include <cstdlib>
 #include <utility>
+#include <memory>
+
+#include <sys/mman.h>
+#include <sys/stat.h>
+#include <sys/types.h>
 
 using namespace std;
 
 int Ks[] = {1, 10, 100, -1};
+
+float *read_memory(const char *file, int n, int dim) {
+    float *data = new float[n * dim];
+
+    FILE *fd;
+    if ((fd = fopen(file, "rb")) == NULL)
+        return NULL;
+
+    int read = fread(data, sizeof(float), n * dim, fd);
+    if (read != n * dim)
+        return NULL;
+
+    fclose(fd);
+    return data;
+}
+
+float *read_mmap(const char *file, int n, int dim) {
+    FILE *fd;
+    if ((fd = fopen(file, "rb")) == NULL)
+        return NULL;
+
+    float *data;
+
+    if ((data = reinterpret_cast<float *> (
+#ifdef MAP_POPULATE
+            mmap(0, n * dim * sizeof(float), PROT_READ,
+            MAP_SHARED | MAP_POPULATE, fileno(fd), 0))) == MAP_FAILED) {
+#else
+            mmap(0, n * dim * sizeof(float), PROT_READ,
+            MAP_SHARED, fileno(fd), 0))) == MAP_FAILED) {
+#endif
+            return NULL;
+    }
+
+    fclose(fd);
+    return data;
+}
+
 
 float *get_data(const char *file, int dim, int *n) {
     struct stat sb;
@@ -28,7 +71,8 @@ float *get_data(const char *file, int dim, int *n) {
     return data;
 }
 
-void results(int k, const vector<double> &times, const vector<set<int>> &idx, const char *truth) {
+
+void results(int k, const vector<double> &times, const vector<set<int>> &idx, const char *truth, bool verbose = false) {
     double time;
     vector<set<int>> correct;
 
@@ -62,5 +106,10 @@ void results(int k, const vector<double> &times, const vector<set<int>> &idx, co
     variance /= (results.size() - 1);
 
     cout << setprecision(5);
-    cout << mean_accuracy << " " << variance << " " << total_time << endl;
+    if(verbose)
+        cout << "accuracy: " << mean_accuracy << ", variance:  " << variance << ", query time: " << total_time << endl;
+    else
+        cout << mean_accuracy << " " << variance << " " << total_time << endl;
+
+
 }

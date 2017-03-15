@@ -2,22 +2,25 @@
 #include <cstdio>
 #include <stdint.h>
 #include <omp.h>
+#include <Eigen/Dense>
+#include <Eigen/SparseCore>
+#include <bench/BenchTimer.h>
+
 
 #include <sys/types.h>
 #include <sys/stat.h>
 #include <unistd.h>
 
-#include "Mrpt.h"
-#include "Eigen/Core"
-
+#include <cpp/Mrpt.h>
 #include "common.h"
 
 using namespace Eigen;
 
+
 int main()
 {
-    int n_test;
-    int n;
+    int n_test = 100;
+    int n = 59900;
     int dim = 784;
     int n_trees = 256;
     int depth = 10;
@@ -25,11 +28,14 @@ int main()
     std::vector<int> vote = {1,2,3,4,5,10};
 
     std::string path = "/home/hyvi/HYVI/git/MRPT_test/data/mnist";
-    float *train_data = get_data((path + "/train.bin").c_str(), dim, &n);
-    float *test_data = get_data((path + "/test.bin").c_str(), dim, &n_test);
+    // float *train_data = get_data((path + "/train.bin").c_str(), dim, &n);
+    // float *test_data = get_data((path + "/test.bin").c_str(), dim, &n_test);
+
+    float *train_data = read_mmap((path + "/train.bin").c_str(), dim, n);
+    float *test_data = read_mmap((path + "/test.bin").c_str(), dim, n_test);
 
 
-    const Map<MatrixXf> *X = new Map<MatrixXf>(train_data, dim, n);
+    const Map<const MatrixXf> *X = new Map<const MatrixXf>(train_data, dim, n);
 
     std::cout << "Data read.\n";
 
@@ -51,7 +57,8 @@ int main()
             for (int i = 0; i < n_test; ++i) {
                 std::vector<int> result(k);
                 double start = omp_get_wtime();
-                int nn = index.query(Map<VectorXf>(&test_data[i * dim], dim), k, votes, 0, &result[0]);
+
+                index.query(Map<VectorXf>(&test_data[i * dim], dim), k, votes, 0, &result[0]);
 
                 double end = omp_get_wtime();
                 times.push_back(end - start);
@@ -59,7 +66,7 @@ int main()
             }
 
             std::cout << k << " " << n_trees << " " << depth << " " << sparsity << " " << votes << " ";
-            results(k, times, idx, (std::string(path) + "/truth_" + std::to_string(k)).c_str());
+            results(k, times, idx, (std::string(path) + "/truth_" + std::to_string(k)).c_str(), true);
         }
     }
 
